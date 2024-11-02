@@ -5,7 +5,7 @@ from tensorflow import keras as k
 from tensorflow.keras import layers as l, models as m
 import shap
 
-from utils import COLUMNS, get_train_dataset, get_test_dataset
+from utils import COLUMNS, get_train_dataset, get_test_dataset, create_csv
 
 np.random.seed(42)
 tf.random.set_seed(42)
@@ -72,4 +72,8 @@ if __name__ == "__main__":
         print(model.evaluate(x_test, y_test, return_dict=True))
 
 
+    # Download the data and place in the same folder as "data.zip" and uncomment the following line
+    # create_csv()
     explain_classifier_model()
+
+    # make_prediction()

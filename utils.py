@@ -36,6 +36,7 @@ def create_small(name, n, random_state=42):
     small_good = good.sample(n=n, random_state=random_state)
     small_bad = bad.sample(n=n, random_state=random_state)
 
+    # just replace "-" with zeros
     small_good.replace("-", 0, inplace=True)
     small_bad.replace("-", 0, inplace=True)
 
