@@ -1,10 +1,5 @@
 import pandas as pd
 
-#
-# def print(*args):
-#     pass
-
-
 TRAIN_COUNT = 500
 TEST_COUNT = 1000
 COLUMNS = [

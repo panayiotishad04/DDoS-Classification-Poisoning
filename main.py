@@ -1,52 +1,13 @@
-import pandas as pd
 import tensorflow as tf
 import numpy as np
-from tensorflow import keras as k
-from tensorflow.keras import layers as l, models as m
 import shap
 
-from utils import COLUMNS, get_train_dataset, get_test_dataset, create_csv
+from gan import get_trained_gan
+from model import get_trained_model, NOISE_DIM
+from utils import get_train_dataset, get_test_dataset
 
 np.random.seed(42)
 tf.random.set_seed(42)
-
-
-def get_trained_model():
-    model = make_classifier_model()
-
-    model.compile(optimizer='adam',
-                  loss="binary_crossentropy",
-                  metrics=['accuracy'])
-
-    model.summary()
-
-    x_train, y_train = get_train_dataset()
-    model.fit(x_train, y_train, epochs=50, batch_size=32, shuffle=True, verbose=0)
-
-    return model
-
-
-def make_classifier_model():
-    model = m.Sequential([
-        l.Input(shape=(len(COLUMNS),)),
-        l.Dense(64, activation='relu'),
-        l.Dense(32, activation='relu'),
-        l.Dense(1, activation='sigmoid')
-    ])
-
-    return model
-
-
-def make_generator_model():
-    model = m.Sequential([
-        l.Input(shape=(100,)),
-        l.Dense(32, activation='relu'),
-        l.Dense(64, activation='relu'),
-        l.Dense(len(COLUMNS), activation='tanh')
-    ])
-
-    return model
-
 
 if __name__ == "__main__":
 
@@ -74,6 +35,11 @@ if __name__ == "__main__":
 
     # Download the data and place in the same folder as "data.zip" and uncomment the following line
     # create_csv()
-    explain_classifier_model()
+    # explain_classifier_model()
 
-    # make_prediction()
+    generator, predictor = get_trained_gan()
+
+    flow = generator(tf.random.normal([1, NOISE_DIM]), training=False)
+
+    predicted = predictor.predict(flow)
+    print(f"Flow {flow}, prediction {predicted}")
