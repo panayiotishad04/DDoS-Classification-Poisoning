@@ -34,8 +34,8 @@ def build_dataframe() -> pd.DataFrame:
 
 def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
     g = nx.DiGraph()
-    # protos = list(set(df['proto_enum'].tolist()))
-    # protos_map = dict(zip(protos, range(len(protos))))
+    protos = list(set(df['proto_enum'].tolist()))
+    protos_map = dict(zip(protos, range(len(protos))))
 
     for _, row in df.iterrows():
         g.add_node(row['id.orig_addr'])
@@ -44,8 +44,8 @@ def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
         destination = row['id.resp_haddr']
         edge_attrs = {
             # 'source_port': int(row['id.orig_port']),
-            # 'destination_port': int(row['id.resp_pport']),
-            # 'proto_enum': int(protos_map[row['proto_enum']]),
+            'destination_port': int(row['id.resp_pport']),
+            'proto_enum': int(protos_map[row['proto_enum']]),
             'duration': float(row['duration_interval']),
             'miss_bytes_count': int(row['missed_bytes_count']),
             'bytes': int(row['bytes']),
@@ -70,12 +70,16 @@ class GNN(nn.Module):
 
 
 def prepare_feats_labels(df):
-    features = df[['duration_interval', 'missed_bytes_count', 'bytes', 'packet_count']].values
+    features = df[[
+        # 'id.orig_port',
+        'id.resp_pport',
+        'duration_interval',
+        'missed_bytes_count', 'bytes', 'packet_count']].values
     labels = df['Category'].values
     return torch.tensor(features, dtype=torch.float32), torch.tensor(labels, dtype=torch.int64)
 
 
-def train_model(model, graph, features, labels, epochs=500):
+def train_model(model, graph, features, labels, epochs=200):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     all_logits = []
     for epoch in range(epochs):
@@ -109,10 +113,14 @@ if __name__ == "__main__":
     train_graph_data = build_networkx_graph(train_df)
     test_graph_data = build_networkx_graph(test_df)
 
-    dgl_train_graph = dgl.from_networkx(train_graph_data,
-                                        edge_attrs=['duration', 'miss_bytes_count', 'bytes', 'packet_count', 'label'])
-    dgl_test_graph = dgl.from_networkx(test_graph_data,
-                                       edge_attrs=['duration', 'miss_bytes_count', 'bytes', 'packet_count', 'label'])
+    attribs = [
+        # 'source_port',
+        'destination_port',
+        'duration',
+        'miss_bytes_count', 'bytes', 'packet_count', 'label']
+
+    dgl_train_graph = dgl.from_networkx(train_graph_data, edge_attrs=attribs)
+    dgl_test_graph = dgl.from_networkx(test_graph_data, edge_attrs=attribs)
 
     dgl_train_graph = dgl.add_self_loop(dgl_train_graph)
     dgl_test_graph = dgl.add_self_loop(dgl_test_graph)
