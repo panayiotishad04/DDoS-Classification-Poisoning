@@ -3,16 +3,17 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 
-np.random.seed(42)
-tf.random.set_seed(42)
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
+tf.random.set_seed(RANDOM_SEED)
 pd.set_option('future.no_silent_downcasting', True)
 
-TRAIN_COUNT = 500
-TEST_COUNT = 1000
+TRAIN_COUNT = 1500
+TEST_COUNT = 400
 
 NOISE_DIM = 100
 BATCH_SIZE = 256
-EPOCHS = 300
+EPOCHS = 500
 
 CATEGORICAL = [
     'proto_enum',
@@ -56,7 +57,7 @@ def create_csv():
             df[column] = categorical_variable(df[column])
         return df
 
-    def create_small(name, n, random_state=42):
+    def create_small(name, n):
         good = ["Only_Benign_7-1.csv", "Only_Benign_34-1.csv", "Only_Benign_60-1.csv"]
         bad = ["Only_DDOS_7-1.csv", "Only_DDOS_34-1.csv"]
 
@@ -69,8 +70,8 @@ def create_csv():
         print(good.dtypes)
         print(f"good count {good.shape[0]}, bad count {bad.shape[0]}")
 
-        small_good = good.sample(n=n, random_state=random_state)
-        small_bad = bad.sample(n=n, random_state=random_state)
+        small_good = good.sample(n=n, random_state=RANDOM_SEED)
+        small_bad = bad.sample(n=n, random_state=RANDOM_SEED)
 
         assert good.shape[1] == bad.shape[1]
 
@@ -125,6 +126,7 @@ def get_test_dataset():
 def make_classifier_model():
     model = m.Sequential([
         l.Input(shape=(len(COLUMNS),)),
+        l.Dense(256, activation='relu'),
         l.Dense(128, activation='relu'),
         l.Dense(64, activation='relu'),
         l.Dense(1, activation='sigmoid')
