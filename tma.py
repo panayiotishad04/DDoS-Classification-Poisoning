@@ -21,8 +21,8 @@ CATEGORICAL = [
 ]
 
 COLUMNS = CATEGORICAL + [
-    'id.orig_port',
-    'id.resp_pport',
+    # 'id.orig_port',
+    # 'id.resp_pport',
     'orig_bytes_count',
     'resp_bytes_count',
     'missed_bytes_count',
@@ -226,7 +226,7 @@ def make_prediction():
 if __name__ == "__main__":
     create_csv()
     make_prediction()
-
+    print(COLUMNS)
     # generator, predictor = get_trained_gan()
     #
     # flow = generator(tf.random.normal([1, NOISE_DIM]), training=False)
