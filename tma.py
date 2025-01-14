@@ -18,9 +18,9 @@ BATCH_SIZE = 256
 EPOCHS = 500
 
 # history_string embedding
-MAX_LEN = 40
+MAX_LEN = 16
 VOCAB_SIZE = 14
-embedding_dim = 50
+embedding_dim = 20
 
 CATEGORICAL = [
     'proto_enum',
@@ -96,7 +96,7 @@ def tokenize(df):
     return sequences
 
 
-def get_dataset(dataset_type: str):
+def get_dataset(dataset_type: str, embedding=False):
     """
     Loads dataset, create the datasets before using create_csv
     """
@@ -114,10 +114,26 @@ def get_dataset(dataset_type: str):
     print("\n\n")
     print("Bad\n", bad[COLUMNS].describe())
 
-    return [df_num, df_emb], y
+    if embedding:
+        return [df_num, df_emb], y
+    else:
+        return df_num, y
 
 
 def make_classifier_model():
+    numerical = l.Input(shape=(len(COLUMNS),))
+
+    x = l.Dense(128, activation='relu')(numerical)
+    x = l.Dense(64, activation='relu')(x)
+
+    output = l.Dense(1, activation='sigmoid')(x)
+
+    model = m.Model(inputs=numerical, outputs=output)
+
+    return model
+
+
+def make_classifier_with_embedding_model():
     history_string = l.Input(shape=(MAX_LEN,))
     numerical = l.Input(shape=(len(COLUMNS),))
 
@@ -147,11 +163,11 @@ def make_generator_model():
     return model
 
 
-def get_trained_model():
+def get_trained_model(embedding=False):
     """
     generate trained classifier
     """
-    model = make_classifier_model()
+    model = make_classifier_with_embedding_model() if embedding else make_classifier_model()
 
     model.compile(optimizer='adam',
                   loss="binary_crossentropy",
@@ -159,7 +175,7 @@ def get_trained_model():
 
     model.summary()
 
-    x_train, y_train = get_dataset('train')
+    x_train, y_train = get_dataset('train', embedding=embedding)
     model.fit(x_train, y_train, epochs=EPOCHS, batch_size=32, shuffle=True)
 
     return model
@@ -172,7 +188,7 @@ def get_trained_gan():
     cross_entropy = tf.keras.losses.BinaryCrossentropy()
     generator_optimizer = tf.keras.optimizers.Adam(1e-4)
     generator = make_generator_model()
-    discriminator = get_trained_model()
+    discriminator = get_trained_model(embedding=False)
 
     @tf.function
     def train_step():
@@ -217,18 +233,20 @@ def explain_classifier_model():
         shap.plots.waterfall(shap_value)
 
 
-def make_prediction():
+def make_prediction(embedding: bool = False):
     """
     train the model and test the performance
     """
-    x_test, y_test = get_dataset('test')
-    model = get_trained_model()
+
+    x_test, y_test = get_dataset('test', embedding=embedding)
+    model = get_trained_model(embedding=embedding)
+
     print(model.evaluate(x_test, y_test, return_dict=True))
 
 
 if __name__ == "__main__":
     create_csv()
-    make_prediction()
+    make_prediction(embedding=True)
     print(COLUMNS)
     # generator, predictor = get_trained_gan()
     #
