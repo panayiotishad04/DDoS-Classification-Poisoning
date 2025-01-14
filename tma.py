@@ -18,8 +18,8 @@ BATCH_SIZE = 256
 EPOCHS = 500
 
 # history_string embedding
-MAX_LEN = 16
-VOCAB_SIZE = 14
+MAX_LEN = 15
+VOCAB_SIZE = 15
 embedding_dim = 20
 
 CATEGORICAL = [
@@ -138,6 +138,7 @@ def make_classifier_with_embedding_model():
     numerical = l.Input(shape=(len(COLUMNS),))
 
     x = l.Embedding(input_dim=VOCAB_SIZE, output_dim=embedding_dim, input_length=MAX_LEN)(history_string)
+    x = l.Bidirectional(l.LSTM(32))(x)
     x_emb = l.Flatten()(x)
 
     x = l.Concatenate()([numerical, x_emb])
