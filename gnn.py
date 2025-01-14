@@ -1,21 +1,16 @@
-import pandas as pd
-import networkx as nx
 import dgl
+import networkx as nx
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl.function as fn
-import matplotlib.pyplot as plt
-import numpy as np
-from dgl.nn.pytorch import GraphConv
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 
 CATEGORICAL = [
     'proto_enum',
     'service_string',
     'conn_state_string',
-    'history_string'
 ]
 
 COLUMNS = CATEGORICAL + [
@@ -25,6 +20,14 @@ COLUMNS = CATEGORICAL + [
     'bytes',
     'packet_count',
 ]
+
+
+def categorical_variable(df: pd.DataFrame) -> pd.DataFrame:
+    variables = list(df.unique())
+    variables_map = dict(zip(variables, range(len(variables))))
+    print(variables_map)
+    df = df.apply(lambda x: variables_map[x])
+    return df
 
 
 def build_dataframe() -> pd.DataFrame:
@@ -40,6 +43,9 @@ def build_dataframe() -> pd.DataFrame:
     df['duration_interval'] = df['duration_interval'].astype(float)
     df['Category'] = (df['Category'] == 'Malicious').astype(int)
 
+    for category in CATEGORICAL:
+        df[category] = categorical_variable(df[category])
+
     print(df.describe())
     print(df.head())
     print(df.columns)
@@ -47,19 +53,8 @@ def build_dataframe() -> pd.DataFrame:
     return df
 
 
-def categorical_variable(df: pd.DataFrame) -> pd.DataFrame:
-    variables = list(df.unique())
-    variables_map = dict(zip(variables, range(len(variables))))
-    print(variables_map)
-    df = df.apply(lambda x: variables_map[x])
-    return df
-
-
 def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
     g = nx.DiGraph()
-
-    for category in CATEGORICAL:
-        df[category] = categorical_variable(df[category])
 
     for _, row in df.iterrows():
         g.add_node(row['id.orig_addr'])

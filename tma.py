@@ -1,7 +1,9 @@
-from tensorflow.keras import layers as l, models as m
-import tensorflow as tf
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+from tensorflow.keras import layers as l, models as m
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
 
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
@@ -15,11 +17,15 @@ NOISE_DIM = 100
 BATCH_SIZE = 256
 EPOCHS = 500
 
+# history_string embedding
+MAX_LEN = 40
+VOCAB_SIZE = 14
+embedding_dim = 50
+
 CATEGORICAL = [
     'proto_enum',
     'service_string',
     'conn_state_string',
-    'history_string'
 ]
 
 COLUMNS = CATEGORICAL + [
@@ -62,22 +68,16 @@ def create_csv():
         good = ["Only_Benign_7-1.csv", "Only_Benign_34-1.csv", "Only_Benign_60-1.csv"]
         bad = ["Only_DDOS_7-1.csv", "Only_DDOS_34-1.csv"]
 
-        good = [pd.read_csv(file) for file in good]
-        bad = [pd.read_csv(file) for file in bad]
-        good = pd.concat(good, ignore_index=True)
-        bad = pd.concat(bad, ignore_index=True)
+        df = [pd.read_csv(file) for file in good] + [pd.read_csv(file) for file in bad]
+        df = pd.concat(df, ignore_index=True)
 
-        print(good.columns)
-        print(good.dtypes)
-        print(f"good count {good.shape[0]}, bad count {bad.shape[0]}")
+        print(df.columns)
+        print(df.dtypes)
+        print(f"good count {df.shape[0]}")
 
-        small_good = good.sample(n=n, random_state=RANDOM_SEED)
-        small_bad = bad.sample(n=n, random_state=RANDOM_SEED)
-
-        assert good.shape[1] == bad.shape[1]
-
-        small_good = preprocess(small_good)
-        small_bad = preprocess(small_bad)
+        df = preprocess(df)
+        small_good = df[df['Category'] == "Benign"].sample(n=n, random_state=RANDOM_SEED)
+        small_bad = df[df['Category'] == "Malicious"].sample(n=n, random_state=RANDOM_SEED)
 
         pd.DataFrame(small_bad).to_csv(f"bad_{name}.txt")
         pd.DataFrame(small_good).to_csv(f"good_{name}.txt")
@@ -86,52 +86,52 @@ def create_csv():
     create_small("test", TEST_COUNT)
 
 
-def get_train_dataset():
+def tokenize(df):
+    print(df)
+    tokenizer = Tokenizer(num_words=VOCAB_SIZE)
+    tokenizer.fit_on_texts(df)
+    sequences = tokenizer.texts_to_sequences(df)
+    sequences = pad_sequences(sequences, maxlen=MAX_LEN)
+    print(sequences.shape)
+    return sequences
+
+
+def get_dataset(dataset_type: str):
     """
-    Load train dataset, create the datasets before using create_csv
+    Loads dataset, create the datasets before using create_csv
     """
-    good = pd.read_csv("good_train.txt")
-    bad = pd.read_csv("bad_train.txt")
+    good = pd.read_csv(f"good_{dataset_type}.txt")
+    bad = pd.read_csv(f"bad_{dataset_type}.txt")
 
     df = pd.concat([good, bad])
 
-    df_train = df[COLUMNS]
-    y = df['Category'] == "Malicious"
+    df_num = df[COLUMNS].values
+    df_emb = tokenize(df['history_string'])
 
-    assert sum(y) == TRAIN_COUNT
+    y = df['Category'] == "Malicious"
 
     print("Good\n", good[COLUMNS].describe())
     print("\n\n")
     print("Bad\n", bad[COLUMNS].describe())
 
-    return df_train, y
-
-
-def get_test_dataset():
-    """
-    Load test dataset, create the datasets before using create_csv
-    """
-    good = pd.read_csv("good_test.txt")
-    bad = pd.read_csv("bad_test.txt")
-
-    df = pd.concat([good, bad])
-
-    df_test = df[COLUMNS]
-    y = df['Category'] == "Malicious"
-
-    assert sum(y) == TEST_COUNT
-
-    return df_test, y
+    return [df_num, df_emb], y
 
 
 def make_classifier_model():
-    model = m.Sequential([
-        l.Input(shape=(len(COLUMNS),)),
-        l.Dense(256, activation='relu'),
-        l.Dense(128, activation='relu'),
-        l.Dense(64, activation='relu'),
-        l.Dense(1, activation='sigmoid')
-    ])
+    history_string = l.Input(shape=(MAX_LEN,))
+    numerical = l.Input(shape=(len(COLUMNS),))
+
+    x = l.Embedding(input_dim=VOCAB_SIZE, output_dim=embedding_dim, input_length=MAX_LEN)(history_string)
+    x_emb = l.Flatten()(x)
+
+    x = l.Concatenate()([numerical, x_emb])
+
+    x = l.Dense(128, activation='relu')(x)
+    x = l.Dense(64, activation='relu')(x)
+
+    output = l.Dense(1, activation='sigmoid')(x)
+
+    model = m.Model(inputs=[numerical, history_string], outputs=output)
 
     return model
 
@@ -159,7 +159,7 @@ def get_trained_model():
 
     model.summary()
 
-    x_train, y_train = get_train_dataset()
+    x_train, y_train = get_dataset('train')
     model.fit(x_train, y_train, epochs=EPOCHS, batch_size=32, shuffle=True)
 
     return model
@@ -202,8 +202,8 @@ def explain_classifier_model():
     use shap values to explain the detection
     """
     import shap
-    x, y = get_train_dataset()
-    x_test, y = get_test_dataset()
+    x, y = get_dataset('train')
+    x_test, y = get_dataset('test')
 
     model = get_trained_model()
 
@@ -221,7 +221,7 @@ def make_prediction():
     """
     train the model and test the performance
     """
-    x_test, y_test = get_test_dataset()
+    x_test, y_test = get_dataset('test')
     model = get_trained_model()
     print(model.evaluate(x_test, y_test, return_dict=True))
 
