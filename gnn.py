@@ -11,11 +11,15 @@ from dgl.nn.pytorch import GraphConv
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-COLUMNS = [
-    # 'proto_enum',
-    # 'conn_state_string',
-    'id.resp_pport',
+CATEGORICAL = [
+    'proto_enum',
     'service_string',
+    'conn_state_string',
+    'history_string'
+]
+
+COLUMNS = CATEGORICAL + [
+    # 'id.resp_pport',
     'duration_interval',
     'missed_bytes_count',
     'bytes',
@@ -53,9 +57,9 @@ def categorical_variable(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
     g = nx.DiGraph()
-    df['service_string'] = categorical_variable(df['service_string'])
-    df['proto_enum'] = categorical_variable(df['proto_enum'])
-    df['conn_state_string'] = categorical_variable(df['conn_state_string'])
+
+    for category in CATEGORICAL:
+        df[category] = categorical_variable(df[category])
 
     for _, row in df.iterrows():
         g.add_node(row['id.orig_addr'])

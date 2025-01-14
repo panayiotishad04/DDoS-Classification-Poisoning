@@ -19,6 +19,7 @@ CATEGORICAL = [
     'proto_enum',
     'service_string',
     'conn_state_string',
+    'history_string'
 ]
 
 COLUMNS = CATEGORICAL + [
