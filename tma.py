@@ -271,7 +271,7 @@ def categorical_mutator(value, name):
 def numerical_mutator(value, name):
     # mutation = np.random.randint(low=-100, high=100)
     # return np.clip(mutation + value, a_min=0, a_max=2 ^ 16 - 1)
-    return np.random.randint(low=0, high=777, size=1)
+    return np.random.randint(low=0, high=300, size=1)
 
 
 GENERATORS = {
@@ -336,7 +336,16 @@ def genetic_algorithm():
             offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
         return offspring
 
-    def mutation(offspring, mutation_rate=0.4, debug=False):
+    def mutation_algo1(offspring, mutation_rate=0.1, debug=False):
+
+        for idx in range(offspring.shape[0]):
+            for _ in range(int(mutation_rate * offspring.shape[1])):
+                mutation_index = np.random.randint(0, offspring.shape[1])
+                random_value = np.random.uniform(-0.5, 0.5)
+                offspring[idx, mutation_index] += random_value
+        return offspring
+
+    def mutation_algo2(offspring, mutation_rate=0.1, debug=False):
         for idx in range(offspring.shape[0]):
             columns = random.sample(list(enumerate(COLUMNS)), int(len(COLUMNS) * mutation_rate))
             sample = offspring[idx]
@@ -369,7 +378,7 @@ def genetic_algorithm():
         fitness = fitness_function(model, samples, target_label)
         parents = select_mating_pool(samples, fitness, num_parents_mating)
         offspring_crossover = crossover(parents, (pop_size - parents.shape[0], sample_shape[0]))
-        offspring_mutation = mutation(offspring_crossover, debug=generation % 100 == 0)
+        offspring_mutation = mutation_algo2(offspring_crossover, debug=False)
         samples[:parents.shape[0], :] = parents
         samples[parents.shape[0]:, :] = offspring_mutation
 
