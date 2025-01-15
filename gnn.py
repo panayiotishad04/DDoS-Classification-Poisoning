@@ -1,15 +1,33 @@
-import pandas as pd
-import networkx as nx
 import dgl
+import networkx as nx
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl.function as fn
-import matplotlib.pyplot as plt
-import numpy as np
-from dgl.nn.pytorch import GraphConv
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+
+CATEGORICAL = [
+    'proto_enum',
+    'service_string',
+    'conn_state_string',
+]
+
+COLUMNS = CATEGORICAL + [
+    # 'id.resp_pport',
+    'duration_interval',
+    'missed_bytes_count',
+    'bytes',
+    'packet_count',
+]
+
+
+def categorical_variable(df: pd.DataFrame) -> pd.DataFrame:
+    variables = list(df.unique())
+    variables_map = dict(zip(variables, range(len(variables))))
+    print(variables_map)
+    df = df.apply(lambda x: variables_map[x])
+    return df
 
 
 def build_dataframe() -> pd.DataFrame:
@@ -25,6 +43,9 @@ def build_dataframe() -> pd.DataFrame:
     df['duration_interval'] = df['duration_interval'].astype(float)
     df['Category'] = (df['Category'] == 'Malicious').astype(int)
 
+    for category in CATEGORICAL:
+        df[category] = categorical_variable(df[category])
+
     print(df.describe())
     print(df.head())
     print(df.columns)
@@ -34,8 +55,6 @@ def build_dataframe() -> pd.DataFrame:
 
 def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
     g = nx.DiGraph()
-    protos = list(set(df['proto_enum'].tolist()))
-    protos_map = dict(zip(protos, range(len(protos))))
 
     for _, row in df.iterrows():
         g.add_node(row['id.orig_addr'])
@@ -43,14 +62,16 @@ def build_networkx_graph(df: pd.DataFrame) -> nx.DiGraph:
         source = row['id.orig_addr']
         destination = row['id.resp_haddr']
         edge_attrs = {
-            # 'source_port': int(row['id.orig_port']),
-            'destination_port': int(row['id.resp_pport']),
-            'proto_enum': int(protos_map[row['proto_enum']]),
-            'duration': float(row['duration_interval']),
-            'miss_bytes_count': int(row['missed_bytes_count']),
+            # 'id.orig_port': int(row['id.orig_port']),
+            'id.resp_pport': int(row['id.resp_pport']),
+            'proto_enum': int(row['proto_enum']),
+            'conn_state_string': int(row['conn_state_string']),
+            'service_string': int(row['service_string']),
+            'duration_interval': float(row['duration_interval']),
+            'missed_bytes_count': int(row['missed_bytes_count']),
             'bytes': int(row['bytes']),
             'packet_count': int(row['packet_count']),
-            'label': int(row['Category'])
+            'Category': int(row['Category'])
         }
         g.add_edge(source, destination, **edge_attrs)
     return g
@@ -70,11 +91,7 @@ class GNN(nn.Module):
 
 
 def prepare_feats_labels(df):
-    features = df[[
-        # 'id.orig_port',
-        'id.resp_pport',
-        'duration_interval',
-        'missed_bytes_count', 'bytes', 'packet_count']].values
+    features = df[COLUMNS].values
     labels = df['Category'].values
     return torch.tensor(features, dtype=torch.float32), torch.tensor(labels, dtype=torch.int64)
 
@@ -113,14 +130,8 @@ if __name__ == "__main__":
     train_graph_data = build_networkx_graph(train_df)
     test_graph_data = build_networkx_graph(test_df)
 
-    attribs = [
-        # 'source_port',
-        'destination_port',
-        'duration',
-        'miss_bytes_count', 'bytes', 'packet_count', 'label']
-
-    dgl_train_graph = dgl.from_networkx(train_graph_data, edge_attrs=attribs)
-    dgl_test_graph = dgl.from_networkx(test_graph_data, edge_attrs=attribs)
+    dgl_train_graph = dgl.from_networkx(train_graph_data, edge_attrs=COLUMNS + ["Category"])
+    dgl_test_graph = dgl.from_networkx(test_graph_data, edge_attrs=COLUMNS + ["Category"])
 
     dgl_train_graph = dgl.add_self_loop(dgl_train_graph)
     dgl_test_graph = dgl.add_self_loop(dgl_test_graph)
