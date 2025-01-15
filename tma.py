@@ -336,12 +336,12 @@ def genetic_algorithm():
             offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
         return offspring
 
-    def mutation(offspring, mutation_rate=0.4):
+    def mutation(offspring, mutation_rate=0.4, debug=False):
         for idx in range(offspring.shape[0]):
             columns = random.sample(list(enumerate(COLUMNS)), int(len(COLUMNS) * mutation_rate))
             sample = offspring[idx]
 
-            if idx % 1000 == 0:
+            if debug:
                 print(sample)
                 print(columns)
 
@@ -349,7 +349,7 @@ def genetic_algorithm():
                 sample[j] = MUTATORS[value](sample, value)
 
             offspring[idx] = sample
-            if idx % 1000 == 0:
+            if debug:
                 print(sample)
 
         return offspring
@@ -369,7 +369,7 @@ def genetic_algorithm():
         fitness = fitness_function(model, samples, target_label)
         parents = select_mating_pool(samples, fitness, num_parents_mating)
         offspring_crossover = crossover(parents, (pop_size - parents.shape[0], sample_shape[0]))
-        offspring_mutation = mutation(offspring_crossover)
+        offspring_mutation = mutation(offspring_crossover, debug=generation % 100 == 0)
         samples[:parents.shape[0], :] = parents
         samples[parents.shape[0]:, :] = offspring_mutation
 
