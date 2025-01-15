@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -14,8 +16,8 @@ TRAIN_COUNT = 1500
 TEST_COUNT = 400
 
 NOISE_DIM = 100
-BATCH_SIZE = 256
-EPOCHS = 500
+BATCH_SIZE = 32
+EPOCHS = 20
 
 # history_string embedding
 MAX_LEN = 15
@@ -30,7 +32,7 @@ CATEGORICAL = [
 
 COLUMNS = CATEGORICAL + [
     # 'id.orig_port',
-    # 'id.resp_pport',
+    'id.resp_pport',
     'orig_bytes_count',
     'resp_bytes_count',
     'missed_bytes_count',
@@ -39,6 +41,8 @@ COLUMNS = CATEGORICAL + [
     'resp_pkts_count',
     'resp_bytes'
 ]
+
+CATEGORICAL_VALUES = {}
 
 
 def create_csv():
@@ -55,13 +59,15 @@ def create_csv():
         variables_map = dict(zip(variables, range(len(variables))))
         print(variables_map)
         df = df.apply(lambda x: variables_map[x])
-        return df
+        return df, variables_map
 
     def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         df.replace("-", 0, inplace=True)
         df['duration_interval'] = df['duration_interval'].astype(float)
+        global CATEGORICAL_VALUES
         for column in CATEGORICAL:
-            df[column] = categorical_variable(df[column])
+            df[column], values = categorical_variable(df[column])
+            CATEGORICAL_VALUES[column] = values
         return df
 
     def create_small(name, n):
@@ -176,7 +182,7 @@ def get_trained_model(embedding=False):
     model.summary()
 
     x_train, y_train = get_dataset('train', embedding=embedding)
-    model.fit(x_train, y_train, epochs=EPOCHS, batch_size=32, shuffle=True)
+    model.fit(x_train, y_train, epochs=EPOCHS, batch_size=BATCH_SIZE, shuffle=True)
 
     return model
 
@@ -244,9 +250,139 @@ def make_prediction(embedding: bool = False):
     print(model.evaluate(x_test, y_test, return_dict=True))
 
 
+def categorical_sampler(value, pop_size):
+    return np.random.randint(low=0, high=len(CATEGORICAL_VALUES[value]),
+                             size=pop_size)
+
+
+def numerical_sampler(value, pop_size):
+    return np.random.randint(low=0, high=5000, size=pop_size)
+
+
+def categorical_mutator(value, name):
+    # if value >= len(CATEGORICAL_VALUES[value]):
+    #     return value - 1
+    #
+    # mutation = np.random.randint(low=-1, high=1)
+    # return np.clip(mutation + value, a_min=0, a_max=len(CATEGORICAL_VALUES[name]))
+    return np.random.randint(low=0, high=len(CATEGORICAL_VALUES[name]), size=1)
+
+
+def numerical_mutator(value, name):
+    # mutation = np.random.randint(low=-100, high=100)
+    # return np.clip(mutation + value, a_min=0, a_max=2 ^ 16 - 1)
+    return np.random.randint(low=0, high=777, size=1)
+
+
+GENERATORS = {
+    'proto_enum': categorical_sampler,
+    'service_string': categorical_sampler,
+    'conn_state_string': categorical_sampler,
+    'id.orig_port': numerical_sampler,
+    'id.resp_pport': numerical_sampler,
+    'orig_bytes_count': numerical_sampler,
+    'resp_bytes_count': numerical_sampler,
+    'missed_bytes_count': numerical_sampler,
+    'orig_pkts_count': numerical_sampler,
+    'orig_ip_bytes_count': numerical_sampler,
+    'resp_pkts_count': numerical_sampler,
+    'resp_bytes': numerical_sampler
+}
+
+MUTATORS = {
+    'proto_enum': categorical_mutator,
+    'service_string': categorical_mutator,
+    'conn_state_string': categorical_mutator,
+    'id.orig_port': numerical_mutator,
+    'id.resp_pport': numerical_mutator,
+    'orig_bytes_count': numerical_mutator,
+    'resp_bytes_count': numerical_mutator,
+    'missed_bytes_count': numerical_mutator,
+    'orig_pkts_count': numerical_mutator,
+    'orig_ip_bytes_count': numerical_mutator,
+    'resp_pkts_count': numerical_mutator,
+    'resp_bytes': numerical_mutator
+}
+
+
+def genetic_algorithm():
+    def generate_population(pop_size, sample_shape):
+        sample = np.zeros((pop_size, *sample_shape))
+        for idx, value in enumerate(COLUMNS):
+            sample[:, idx] = GENERATORS[value](value, pop_size)
+        return sample
+
+    def fitness_function(model, samples, target_label):
+        print(samples.shape)
+        predictions = model.predict(samples)
+        return np.abs(predictions - target_label)
+
+    def select_mating_pool(samples, fitness, num_parents):
+        parents = np.zeros((num_parents, samples.shape[1]))
+        for parent_idx in range(num_parents):
+            min_fitness_idx = np.argmin(fitness)
+            parents[parent_idx, :] = samples[min_fitness_idx, :]
+            fitness[min_fitness_idx] = float('inf')
+        return parents
+
+    def crossover(parents, offspring_size):
+        offspring = np.zeros(offspring_size)
+        crossover_point = np.uint8(offspring_size[1] / 2)
+
+        for k in range(offspring_size[0]):
+            parent1_idx = k % parents.shape[0]
+            parent2_idx = (k + 1) % parents.shape[0]
+            offspring[k, 0:crossover_point] = parents[parent1_idx, 0:crossover_point]
+            offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
+        return offspring
+
+    def mutation(offspring, mutation_rate=0.4):
+        for idx in range(offspring.shape[0]):
+            columns = random.sample(list(enumerate(COLUMNS)), int(len(COLUMNS) * mutation_rate))
+            sample = offspring[idx]
+
+            if idx % 1000 == 0:
+                print(sample)
+                print(columns)
+
+            for j, value in columns:
+                sample[j] = MUTATORS[value](sample, value)
+
+            offspring[idx] = sample
+            if idx % 1000 == 0:
+                print(sample)
+
+        return offspring
+
+    # Model, target label (1 for adversarial), and parameters
+    target_label = 1
+    pop_size = 100
+    num_generations = 1000
+    num_parents_mating = 50
+
+    # Generate initial population
+    sample_shape = (len(COLUMNS),)
+    samples = generate_population(pop_size, sample_shape)
+    model = get_trained_model(embedding=False)
+
+    for generation in range(num_generations):
+        fitness = fitness_function(model, samples, target_label)
+        parents = select_mating_pool(samples, fitness, num_parents_mating)
+        offspring_crossover = crossover(parents, (pop_size - parents.shape[0], sample_shape[0]))
+        offspring_mutation = mutation(offspring_crossover)
+        samples[:parents.shape[0], :] = parents
+        samples[parents.shape[0]:, :] = offspring_mutation
+
+        if generation % 100 == 0:
+            print(f'Generation {generation}: Best fitness = {np.min(fitness)}')
+
+    print(samples)
+
+
 if __name__ == "__main__":
     create_csv()
-    make_prediction(embedding=True)
+    genetic_algorithm()
+    # make_prediction(embedding=True)
     print(COLUMNS)
     # generator, predictor = get_trained_gan()
     #
