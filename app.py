@@ -1,3 +1,4 @@
+import csv
 import pickle
 from lime.lime_tabular import LimeTabularExplainer
 import numpy as np
@@ -5,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import os
 from matplotlib import pyplot as plt
-import tensorflow as tf
+# import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import shap
 import xgboost as xgb
@@ -117,7 +118,8 @@ elif view == 'Malicious Alerts':
 elif view == 'Testing':
     st.title("Adversarial Testing")
     st.write("Statistics regarding adversarial testing")
-    malicious_filepath = 'malicious_flows.csv'
+    malicious_filepath = 'df_ben_ddos_shorter.csv'
+
 
     # if st.button('Start Attacking'):
 
@@ -129,21 +131,18 @@ elif view == 'Testing':
         score = [0, 0, 1, 1, 1, 1]
         st.write(f"Adversarial score: {np.average(score)}")
 
-        most_common_prot = df_malicious['pr'].max
-        st.write(f"Most common protocol: {most_common_prot}")
+        # most_common_prot = df_malicious['pr'].max
+        # st.write(f"Most common protocol: {most_common_prot}")
 
         # Example data
-        df_ben_ddos = pd.read_csv('df_ben_ddos.csv')
-        df_first = df_ben_ddos[:70000].sample(n=1000, random_state=42)
-        df_last = df_ben_ddos[80000:].sample(n=1000, random_state=42)
-        df_sampled = pd.concat([df_first, df_last])
+        df_sampled = pd.read_csv('df_ben_ddos_shorter.csv')
         X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
         # feature_names = ['sp', 'dp', 'pr', 'td', 'flg', 'ibyt', 'ipkt', 'opkt', 'obyt']
         y = df_sampled['Category']
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
-        X, y = make_classification(n_samples=1000, n_features=10, n_classes=2, random_state=42)
+        X, y = make_classification(n_samples=10000, n_features=10, n_classes=2, random_state=42)
 
         # Train an XGBoost model
         model = xgb.XGBClassifier()
