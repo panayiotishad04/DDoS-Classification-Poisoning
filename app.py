@@ -82,6 +82,7 @@ if view == 'Normal NIDS':
                     filtered_flows[col] = filtered_flows[col].astype(float)
             except Exception as e:
                 filtered_flows.drop(col, axis=1, inplace=True)
+        print(filtered_flows)
 
         if selected_model == 'Random Forest':
             with open('random_forest_model.pkl', 'rb') as file:
