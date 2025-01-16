@@ -112,7 +112,8 @@ elif view == 'Malicious Alerts':
     try:
         # Attempt to read the malicious alerts file as a pandas DataFrame
         df_malicious = pd.read_csv(malicious_filepath)
-        st.write(f"Displaying preprocessed malicious alerts from {malicious_filepath}:")
+        st.write(f"Total alerts: {df_malicious.shape[0]}")
+        # st.write(f"Displaying preprocessed malicious alerts from {malicious_filepath}:")
         st.dataframe(df_malicious)
 
         if 'pr' in df_malicious.columns:
