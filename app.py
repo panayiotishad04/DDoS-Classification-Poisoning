@@ -1,17 +1,17 @@
-import csv
-import pickle
-from lime.lime_tabular import LimeTabularExplainer
-import numpy as np
-import streamlit as st
-import pandas as pd
 import os
-from matplotlib import pyplot as plt
-# import tensorflow as tf
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+import pickle
+
+import numpy as np
+import pandas as pd
 import shap
+import streamlit as st
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
+from lime.lime_tabular import LimeTabularExplainer
+from matplotlib import pyplot as plt
 from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+# import tensorflow as tf
+from sklearn.preprocessing import LabelEncoder
 from xgboost import plot_tree
 
 # Sidebar for view selection
@@ -120,7 +120,6 @@ elif view == 'Testing':
     st.write("Statistics regarding adversarial testing")
     malicious_filepath = 'df_ben_ddos_shorter.csv'
 
-
     # if st.button('Start Attacking'):
 
     try:
@@ -139,12 +138,24 @@ elif view == 'Testing':
         X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
         # feature_names = ['sp', 'dp', 'pr', 'td', 'flg', 'ibyt', 'ipkt', 'opkt', 'obyt']
         y = df_sampled['Category']
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        # scaler = StandardScaler()
+        # X_scaled = scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         X, y = make_classification(n_samples=10000, n_features=10, n_classes=2, random_state=42)
 
+        feature_names = ['id.orig_port', 'id.resp_pport', 'proto_enum',
+                         'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
+                         'resp_pkts_count', 'resp_bytes']
+
         # Train an XGBoost model
+        dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
+
+        bst = xgb.train({
+            'max_depth': 4,
+            'eta': 0.1,
+            'objective': 'reg:squarederror'
+        }, dtrain, 10)
+
         model = xgb.XGBClassifier()
         model.fit(X_train, y_train)
 
@@ -154,9 +165,6 @@ elif view == 'Testing':
         # Get SHAP values for the test set
         shap_values = explainer.shap_values(X_test)
 
-        feature_names = ['id.orig_port', 'id.resp_haddr', 'id.resp_pport', 'proto_enum',
-                          'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
-                          'resp_pkts_count', 'resp_bytes']
         if st.button("Show SHAP Summary Plot"):
             st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
             st.write("""
@@ -171,19 +179,17 @@ elif view == 'Testing':
         if st.button("Explainer LIME"):
             X_train = pd.DataFrame(X_train, columns=feature_names)
             class_names = ['0', '1']
-            explainer = LimeTabularExplainer(X_train, feature_names=feature_names, class_names=class_names, mode='classification')
+            explainer = LimeTabularExplainer(X_train, feature_names=feature_names, class_names=class_names,
+                                             mode='classification')
 
         if st.button("Show Decision Tree"):
-            class_names = ['0', '1']
-            fig = plt.figure(figsize=(25, 20))
-            _ = plot_tree(model,
-                          feature_names=feature_names,
-                          class_names=class_names,
-                          filled=True)
+            fig, ax = plt.subplots(figsize=(10, 10))
+            plot_tree(bst, num_trees=0, ax=ax)
+            st.pyplot(fig)
 
 
     except Exception as e:
-        st.error(f"Could not read {malicious_filepath} as a DataFrame: {e}")
+        st.error(f"Could not read {malicious_filepath} as a DataFrame: {e.pr()}")
 
 else:
     st.error("The specified directory does not exist.")
