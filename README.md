@@ -7,7 +7,7 @@ This project is a machine-learning-based Intrusion Detection System (IDS) tester
 ### **1. Data preprocesing**
 This script handles data upload and preprocessing tasks. It ensures the dataset is cleaned, normalized, and prepared for training and testing. The dataset we are using on this project is Aposemat-IoT23
 
-File: variables_selection.ipynb
+File: variables_selection_category_encoded.ipynb
 
 - **Functions**:
   - Load raw dataset.
