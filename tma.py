@@ -414,20 +414,18 @@ def boundary_algo(initial_flow, model, threshold=0.7):
         return flows, np.array(ops).reshape((-1, 2))
 
     init_label = model.predict(initial_flow) > threshold
-    flows, ops = mutate_flows(initial_flow)
+    flows, ops = mutate_flows(initial_flow.copy())
     pred_label = model.predict(flows) > threshold
-    
+
     idx = pred_label != init_label
 
     if np.any(idx):
         init_flows = initial_flow[np.broadcast_to(idx, shape=initial_flow.shape)].reshape((-1, len(COLUMNS)))
         mut_flows = flows[np.broadcast_to(idx, shape=flows.shape)].reshape((-1, len(COLUMNS)))
-        operation = ops[np.broadcast_to(idx, shape=ops.shape)].reshape((-1, 2))
+        op = ops[np.broadcast_to(idx, shape=ops.shape)].reshape((-1, 2))
         pred = model.predict(init_flows)
         pred2 = model.predict(mut_flows)
-
-        csv = np.hstack((init_flows, pred, operation, pred2))
-        print(csv, init_flows.shape, operation.shape, csv.shape)
+        csv = np.hstack((init_flows, pred, op, pred2))
         pd.DataFrame(csv, columns=COLUMNS + ['old_pred', "value", 'column', "mutated_pred"]).to_csv('flows.csv')
     return initial_flow
 
@@ -442,7 +440,7 @@ if __name__ == "__main__":
     def boundary_algo_run():
         model = tf.keras.models.load_model('model.keras')
         x_test, y_test = get_dataset('test', embedding=False)
-        flows = boundary_algo(x_test, model)
+        boundary_algo(x_test, model)
 
 
     boundary_algo_run()
