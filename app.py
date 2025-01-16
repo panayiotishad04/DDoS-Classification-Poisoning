@@ -83,7 +83,6 @@ if view == 'Normal NIDS':
             except Exception as e:
                 filtered_flows.drop(col, axis=1, inplace=True)
 
-        # Load the model and make predictions
         if selected_model == 'Random Forest':
             with open('random_forest_model.pkl', 'rb') as file:
                 model = pickle.load(file)
@@ -92,13 +91,8 @@ if view == 'Normal NIDS':
 
         predictions = model.predict(filtered_flows)
 
-        malicious_flows = df[predictions >= 0.0]
-        malicious_file_path = 'malicious_flows.csv'
-
-        # Write malicious flows to a CSV file
-        malicious_flows.to_csv(malicious_file_path, index=False)
-        # Add predictions to the DataFrame
-        df['Prediction'] = (predictions >= 0.0).astype(int)
+        df.to_csv('malicious_flows.csv', index=False)
+        df['Prediction'] = predictions
 
 
     except Exception as e:
