@@ -149,15 +149,11 @@ elif view == 'Testing':
 
         # Train an XGBoost model
         dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
-
-        bst = xgb.train({
-            'max_depth': 4,
+        model = xgb.train({
+            'max_depth': 20,
             'eta': 0.1,
             'objective': 'reg:squarederror'
-        }, dtrain, 10)
-
-        model = xgb.XGBClassifier()
-        model.fit(X_train, y_train)
+        }, dtrain, 30)
 
         # Create a SHAP explainer for the XGBoost model
         explainer = shap.TreeExplainer(model)
@@ -184,7 +180,7 @@ elif view == 'Testing':
 
         if st.button("Show Decision Tree"):
             fig, ax = plt.subplots(figsize=(10, 10))
-            plot_tree(bst, num_trees=0, ax=ax)
+            plot_tree(model, num_trees=0, ax=ax)
             st.pyplot(fig)
 
 
