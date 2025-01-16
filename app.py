@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import os
 from matplotlib import pyplot as plt
-# import tensorflow as tf
+import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import shap
 import xgboost as xgb
@@ -138,6 +138,7 @@ elif view == 'Testing':
         df_last = df_ben_ddos[80000:].sample(n=1000, random_state=42)
         df_sampled = pd.concat([df_first, df_last])
         X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
+        # feature_names = ['sp', 'dp', 'pr', 'td', 'flg', 'ibyt', 'ipkt', 'opkt', 'obyt']
         y = df_sampled['Category']
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
@@ -157,7 +158,6 @@ elif view == 'Testing':
         feature_names = ['id.orig_port', 'id.resp_haddr', 'id.resp_pport', 'proto_enum',
                           'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
                           'resp_pkts_count', 'resp_bytes']
-        # features_names =
         if st.button("Show SHAP Summary Plot"):
             st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
             st.write("""
@@ -170,9 +170,10 @@ elif view == 'Testing':
             st.pyplot(fig)
 
         if st.button("Explainer LIME"):
+            X_train = pd.DataFrame(X_train, columns=feature_names)
             class_names = ['0', '1']
-            explainer = LimeTabularExplainer(X_train.values, feature_names=
-            feature_names, class_names=class_names, mode='classification')
+            explainer = LimeTabularExplainer(X_train, feature_names=feature_names, class_names=class_names, mode='classification')
+
         if st.button("Show Decision Tree"):
             class_names = ['0', '1']
             fig = plt.figure(figsize=(25, 20))
