@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 # import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder
 from xgboost import plot_tree
+import plotly.express as px
 
 # Sidebar for view selection
 st.set_page_config(layout="wide")
@@ -109,6 +110,23 @@ elif view == 'Malicious Alerts':
         st.write(f"Displaying preprocessed malicious alerts from {malicious_filepath}:")
         st.dataframe(df_malicious)
 
+        if 'pr' in df_malicious.columns:
+            protocol_counts = df_malicious['pr'].value_counts(normalize=True) * 100
+            protocol_df = protocol_counts.reset_index()
+            protocol_df.columns = ['Protocol', 'Percentage']
+
+            # Create the pie chart
+            fig = px.pie(protocol_df, names='Protocol', values='Percentage', title='Protocol Distribution')
+            st.plotly_chart(fig)
+
+        if 'ibyt' in df_malicious.columns:
+            # Create a histogram for byte values
+            fig = px.histogram(df_malicious, x='ibyt', nbins=30, title='Histogram of Byte Values (ibyt)',
+                               labels={'ibyt': 'Byte Values'},
+                               template='plotly_white')
+            fig.update_layout(xaxis_title='Byte Values', yaxis_title='Count')
+            st.plotly_chart(fig)
+
     except Exception as e:
         st.error(f"Could not read {malicious_filepath} as a DataFrame: {e}")
 
@@ -182,6 +200,36 @@ elif view == 'Testing':
             fig, ax = plt.subplots(figsize=(10, 10))
             plot_tree(model, num_trees=0, ax=ax)
             st.pyplot(fig)
+
+        if st.button("Compare Hist"):
+            df = pd.read_csv("flows_2.csv")
+            # Create the histogram
+            fig = px.histogram(
+                df,
+                x="column",  # Column to plot
+                title="Feature changed to make the flow benign",
+                labels={"column": "Category"},  # Label for x-axis
+                text_auto=True  # Show counts on bars
+            )
+
+            # Update layout to adjust bar spacing, tilt labels, and set colors
+            fig.update_traces(
+                marker=dict(color="darkorange", line=dict(width=0)),  # Set bar color to orange
+                textfont=dict(color="blue")  # Set text color to blue
+            )
+
+            fig.update_xaxes(tickangle=45, linecolor="blue")  # Tilt labels
+            fig.update_yaxes(linecolor="blue")  # Adjust y-axis line color
+            # Remove background color
+            fig.update_layout(
+                xaxis_title="Feature changed",
+                yaxis_title="Times applied",
+                bargap=0.2,  # Ensure bars are joined
+                plot_bgcolor="white",  # Background color of the plot area
+                paper_bgcolor="white",  # Background color of the entire figure
+            )
+
+            st.plotly_chart(fig)  # Correct method to display Plotly figure in Streamlit
 
 
     except Exception as e:
