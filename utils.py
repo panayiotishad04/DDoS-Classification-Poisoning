@@ -20,8 +20,8 @@ def create_small(name, n, random_state=42):
 
     zipped_data = ZipFile("data.zip", mode="r")
 
-    good = pd.read_csv(zipped_data.open("Only_Benign.csv"))
-    bad = pd.read_csv(zipped_data.open("Only_DDOS.csv"))
+    good = pd.read_csv(zipped_data.open("dataset/Only_Benign.csv"))
+    bad = pd.read_csv(zipped_data.open("dataset/Only_DDOS.csv"))
 
     assert good.shape[1] == bad.shape[1]
 

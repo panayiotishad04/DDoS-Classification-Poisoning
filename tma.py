@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import layers as l, models as m
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.text import Tokenizer
+from tensorflow.keras.sequence import pad_sequences
+
 
 np.set_printoptions(threshold=sys.maxsize)
 RANDOM_SEED = 42
@@ -96,10 +97,22 @@ def create_csv():
 
 def tokenize(df):
     print(df)
-    tokenizer = Tokenizer(num_words=VOCAB_SIZE)
-    tokenizer.fit_on_texts(df)
-    sequences = tokenizer.texts_to_sequences(df)
-    sequences = pad_sequences(sequences, maxlen=MAX_LEN)
+    # Define the TextVectorization layer
+    vectorize_layer = tf.keras.layers.TextVectorization(
+        max_tokens=VOCAB_SIZE,
+        output_mode='int',
+        output_sequence_length=MAX_LEN
+    )
+
+    # Adapt the layer to the text data
+    vectorize_layer.adapt(df)
+
+    # Apply vectorization
+    sequences = vectorize_layer(df)
+
+    # Convert to numpy array for inspection (optional)
+    sequences = sequences.numpy()
+
     print(sequences.shape)
     return sequences
 
@@ -426,7 +439,7 @@ def boundary_algo(initial_flow, model, threshold=0.7):
         pred = model.predict(init_flows)
         pred2 = model.predict(mut_flows)
         csv = np.hstack((init_flows, pred, op, pred2))
-        pd.DataFrame(csv, columns=COLUMNS + ['old_pred', "value", 'column', "mutated_pred"]).to_csv('flows.csv')
+        pd.DataFrame(csv, columns=COLUMNS + ['old_pred', "value", 'column', "mutated_pred"]).to_csv('flows_§.csv')
     return initial_flow
 
 
