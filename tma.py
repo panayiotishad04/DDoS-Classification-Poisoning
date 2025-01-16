@@ -14,8 +14,8 @@ np.random.seed(RANDOM_SEED)
 tf.random.set_seed(RANDOM_SEED)
 pd.set_option('future.no_silent_downcasting', True)
 
-TRAIN_COUNT = 1500
-TEST_COUNT = 400
+TRAIN_COUNT = 1000
+TEST_COUNT = 1000
 
 NOISE_DIM = 100
 BATCH_SIZE = 32
@@ -33,7 +33,7 @@ CATEGORICAL = [
 ]
 
 COLUMNS = CATEGORICAL + [
-    # 'id.orig_port',
+    'id.orig_port',
     'id.resp_pport',
     'orig_bytes_count',
     'resp_bytes_count',
@@ -276,42 +276,26 @@ def numerical_mutator(value, name):
     return np.random.randint(low=0, high=300, size=1)
 
 
-GENERATORS = {
-    'proto_enum': categorical_sampler,
-    'service_string': categorical_sampler,
-    'conn_state_string': categorical_sampler,
-    'id.orig_port': numerical_sampler,
-    'id.resp_pport': numerical_sampler,
-    'orig_bytes_count': numerical_sampler,
-    'resp_bytes_count': numerical_sampler,
-    'missed_bytes_count': numerical_sampler,
-    'orig_pkts_count': numerical_sampler,
-    'orig_ip_bytes_count': numerical_sampler,
-    'resp_pkts_count': numerical_sampler,
-    'resp_bytes': numerical_sampler
-}
-
-MUTATORS = {
-    'proto_enum': categorical_mutator,
-    'service_string': categorical_mutator,
-    'conn_state_string': categorical_mutator,
-    'id.orig_port': numerical_mutator,
-    'id.resp_pport': numerical_mutator,
-    'orig_bytes_count': numerical_mutator,
-    'resp_bytes_count': numerical_mutator,
-    'missed_bytes_count': numerical_mutator,
-    'orig_pkts_count': numerical_mutator,
-    'orig_ip_bytes_count': numerical_mutator,
-    'resp_pkts_count': numerical_mutator,
-    'resp_bytes': numerical_mutator
-}
-
-
 def genetic_algorithm(model, target_label):
+    column_generator = {
+        'proto_enum': categorical_sampler,
+        'service_string': categorical_sampler,
+        'conn_state_string': categorical_sampler,
+        'id.orig_port': numerical_sampler,
+        'id.resp_pport': numerical_sampler,
+        'orig_bytes_count': numerical_sampler,
+        'resp_bytes_count': numerical_sampler,
+        'missed_bytes_count': numerical_sampler,
+        'orig_pkts_count': numerical_sampler,
+        'orig_ip_bytes_count': numerical_sampler,
+        'resp_pkts_count': numerical_sampler,
+        'resp_bytes': numerical_sampler
+    }
+
     def generate_population(pop_size, sample_shape):
         sample = np.zeros((pop_size, *sample_shape))
         for idx, value in enumerate(COLUMNS):
-            sample[:, idx] = GENERATORS[value](value, pop_size)
+            sample[:, idx] = column_generator[value](value, pop_size)
         return sample
 
     def fitness_function(model, samples, target_label):
@@ -346,6 +330,21 @@ def genetic_algorithm(model, target_label):
                 offspring[idx, mutation_index] += random_value
         return offspring
 
+    column_mutator = {
+        'proto_enum': categorical_mutator,
+        'service_string': categorical_mutator,
+        'conn_state_string': categorical_mutator,
+        'id.orig_port': numerical_mutator,
+        'id.resp_pport': numerical_mutator,
+        'orig_bytes_count': numerical_mutator,
+        'resp_bytes_count': numerical_mutator,
+        'missed_bytes_count': numerical_mutator,
+        'orig_pkts_count': numerical_mutator,
+        'orig_ip_bytes_count': numerical_mutator,
+        'resp_pkts_count': numerical_mutator,
+        'resp_bytes': numerical_mutator
+    }
+
     def mutation_algo2(offspring, mutation_rate=0.1, debug=False):
         for idx in range(offspring.shape[0]):
             columns = random.sample(list(enumerate(COLUMNS)), int(len(COLUMNS) * mutation_rate))
@@ -356,7 +355,7 @@ def genetic_algorithm(model, target_label):
                 print(columns)
 
             for j, value in columns:
-                sample[j] = MUTATORS[value](sample, value)
+                sample[j] = column_mutator[value](sample, value)
 
             offspring[idx] = sample
             if debug:
@@ -387,27 +386,92 @@ def genetic_algorithm(model, target_label):
     return samples
 
 
+def boundary_algo(initial_flow, model, threshold=0.7):
+    column_mutator = {
+        'proto_enum': categorical_mutator,
+        'service_string': categorical_mutator,
+        'conn_state_string': categorical_mutator,
+        'id.orig_port': numerical_mutator,
+        'id.resp_pport': numerical_mutator,
+        'orig_bytes_count': numerical_mutator,
+        'resp_bytes_count': numerical_mutator,
+        'missed_bytes_count': numerical_mutator,
+        'orig_pkts_count': numerical_mutator,
+        'orig_ip_bytes_count': numerical_mutator,
+        'resp_pkts_count': numerical_mutator,
+        'resp_bytes': numerical_mutator
+    }
+
+    def mutate_flows(flows):
+        ops = []
+        columns_choices = random.choices(list(enumerate(COLUMNS)), k=flows.shape[0])
+        for idx, (column_idx, column_name) in zip(range(flows.shape[0]), columns_choices):
+            mutator = column_mutator[column_name]
+            v = flows[idx, column_idx]
+            m = mutator(v, column_name)
+            ops.append((m.item(), column_name))
+            flows[idx, column_idx] = m
+        return flows, np.array(ops).reshape((-1, 2))
+
+    init_label = model.predict(initial_flow) > threshold
+    flows, ops = mutate_flows(initial_flow)
+    pred_label = model.predict(flows) > threshold
+    
+    idx = pred_label != init_label
+
+    if np.any(idx):
+        init_flows = initial_flow[np.broadcast_to(idx, shape=initial_flow.shape)].reshape((-1, len(COLUMNS)))
+        mut_flows = flows[np.broadcast_to(idx, shape=flows.shape)].reshape((-1, len(COLUMNS)))
+        operation = ops[np.broadcast_to(idx, shape=ops.shape)].reshape((-1, 2))
+        pred = model.predict(init_flows)
+        pred2 = model.predict(mut_flows)
+
+        csv = np.hstack((init_flows, pred, operation, pred2))
+        print(csv, init_flows.shape, operation.shape, csv.shape)
+        pd.DataFrame(csv, columns=COLUMNS + ['old_pred', "value", 'column', "mutated_pred"]).to_csv('flows.csv')
+    return initial_flow
+
+
 if __name__ == "__main__":
     create_csv()
+
+
     # model = get_trained_model(embedding=False)
     # model.save('model.keras')
-    model = tf.keras.models.load_model('model.keras')
-    print(COLUMNS)
-    good = genetic_algorithm(model, 0)
-    bad = genetic_algorithm(model, 1)
-    good = pd.DataFrame(good, columns=COLUMNS)
-    bad = pd.DataFrame(bad, columns=COLUMNS)
 
-    pred_good = model.predict(good.values)
-    pred_bad = model.predict(bad.values)
-    print(good, pred_good)
-    print(bad, pred_bad)
-    good.to_csv('good.csv')
-    bad.to_csv('bad.csv')
-    # make_prediction(embedding=True)
-    # generator, predictor = get_trained_gan()
+    def boundary_algo_run():
+        model = tf.keras.models.load_model('model.keras')
+        x_test, y_test = get_dataset('test', embedding=False)
+        flows = boundary_algo(x_test, model)
 
-    # flow = generator(tf.random.normal([1, NOISE_DIM]), training=False)
-    #
-    # predicted = predictor.predict(flow)
-    # print(f"Flow {flow}, prediction {predicted}")
+
+    boundary_algo_run()
+
+
+    def genetic_algor_run():
+        model = tf.keras.models.load_model('model.keras')
+        print(COLUMNS)
+        good = genetic_algorithm(model, 0)
+        bad = genetic_algorithm(model, 1)
+        good = pd.DataFrame(good, columns=COLUMNS)
+        bad = pd.DataFrame(bad, columns=COLUMNS)
+
+        pred_good = model.predict(good.values)
+        pred_bad = model.predict(bad.values)
+        print(good, pred_good)
+        print(bad, pred_bad)
+        good.to_csv('good.csv')
+        bad.to_csv('bad.csv')
+
+
+    def embedding_nn_run():
+        make_prediction(embedding=True)
+
+
+    def gan_run():
+        generator, predictor = get_trained_gan()
+
+        flow = generator(tf.random.normal([1, NOISE_DIM]), training=False)
+
+        predicted = predictor.predict(flow)
+        print(f"Flow {flow}, prediction {predicted}")
