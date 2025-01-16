@@ -1,3 +1,5 @@
+import pickle
+from lime.lime_tabular import LimeTabularExplainer
 import numpy as np
 import streamlit as st
 import pandas as pd
@@ -9,7 +11,7 @@ import shap
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import make_classification
-
+from xgboost import plot_tree
 
 # Sidebar for view selection
 st.set_page_config(layout="wide")
@@ -77,7 +79,10 @@ if view == 'Normal NIDS':
         filtered_flows = filtered_flows.astype(int)
 
         # Load the model and make predictions
-        model = tf.keras.models.load_model('nn.h5')
+        # model = tf.keras.models.load_model('nn.h5')
+        with open('random_forest_model.pkl', 'rb') as file:
+            loaded_model = pickle.load(file)
+        model = loaded_model
         predictions = model.predict(filtered_flows)
 
         malicious_flows = df[predictions > 0.0]
@@ -138,7 +143,6 @@ elif view == 'Testing':
         X_scaled = scaler.fit_transform(X)
         X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
         X, y = make_classification(n_samples=1000, n_features=10, n_classes=2, random_state=42)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         # Train an XGBoost model
         model = xgb.XGBClassifier()
@@ -153,7 +157,7 @@ elif view == 'Testing':
         feature_names = ['id.orig_port', 'id.resp_haddr', 'id.resp_pport', 'proto_enum',
                           'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
                           'resp_pkts_count', 'resp_bytes']
-
+        # features_names =
         if st.button("Show SHAP Summary Plot"):
             st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
             st.write("""
@@ -164,6 +168,18 @@ elif view == 'Testing':
             fig = plt.figure()
             shap.summary_plot(shap_values, X_test, feature_names=feature_names, show=False)
             st.pyplot(fig)
+
+        if st.button("Explainer LIME"):
+            class_names = ['0', '1']
+            explainer = LimeTabularExplainer(X_train.values, feature_names=
+            feature_names, class_names=class_names, mode='classification')
+        if st.button("Show Decision Tree"):
+            class_names = ['0', '1']
+            fig = plt.figure(figsize=(25, 20))
+            _ = plot_tree(model,
+                          feature_names=feature_names,
+                          class_names=class_names,
+                          filled=True)
 
 
     except Exception as e:
