@@ -1,4 +1,5 @@
 import random
+import sys
 
 import numpy as np
 import pandas as pd
@@ -7,6 +8,7 @@ from tensorflow.keras import layers as l, models as m
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 
+np.set_printoptions(threshold=sys.maxsize)
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
 tf.random.set_seed(RANDOM_SEED)
@@ -54,7 +56,7 @@ def create_csv():
     - the unknown values will be set to 0.
     """
 
-    def categorical_variable(df: pd.DataFrame) -> pd.DataFrame:
+    def categorical_variable(df: pd.DataFrame):
         variables = list(df.unique())
         variables_map = dict(zip(variables, range(len(variables))))
         print(variables_map)
@@ -256,7 +258,7 @@ def categorical_sampler(value, pop_size):
 
 
 def numerical_sampler(value, pop_size):
-    return np.random.randint(low=0, high=5000, size=pop_size)
+    return np.random.randint(low=0, high=500, size=pop_size)
 
 
 def categorical_mutator(value, name):
@@ -305,7 +307,7 @@ MUTATORS = {
 }
 
 
-def genetic_algorithm():
+def genetic_algorithm(model, target_label):
     def generate_population(pop_size, sample_shape):
         sample = np.zeros((pop_size, *sample_shape))
         for idx, value in enumerate(COLUMNS):
@@ -313,8 +315,8 @@ def genetic_algorithm():
         return sample
 
     def fitness_function(model, samples, target_label):
-        print(samples.shape)
         predictions = model.predict(samples)
+        # print(predictions, samples)
         return np.abs(predictions - target_label)
 
     def select_mating_pool(samples, fitness, num_parents):
@@ -337,7 +339,6 @@ def genetic_algorithm():
         return offspring
 
     def mutation_algo1(offspring, mutation_rate=0.1, debug=False):
-
         for idx in range(offspring.shape[0]):
             for _ in range(int(mutation_rate * offspring.shape[1])):
                 mutation_index = np.random.randint(0, offspring.shape[1])
@@ -363,16 +364,12 @@ def genetic_algorithm():
 
         return offspring
 
-    # Model, target label (1 for adversarial), and parameters
-    target_label = 1
     pop_size = 100
     num_generations = 1000
     num_parents_mating = 50
 
-    # Generate initial population
     sample_shape = (len(COLUMNS),)
     samples = generate_population(pop_size, sample_shape)
-    model = get_trained_model(embedding=False)
 
     for generation in range(num_generations):
         fitness = fitness_function(model, samples, target_label)
@@ -383,18 +380,33 @@ def genetic_algorithm():
         samples[parents.shape[0]:, :] = offspring_mutation
 
         if generation % 100 == 0:
+            predict = model.predict(samples)
+            print(samples, predict)
             print(f'Generation {generation}: Best fitness = {np.min(fitness)}')
 
-    print(samples)
+    return samples
 
 
 if __name__ == "__main__":
     create_csv()
-    genetic_algorithm()
-    # make_prediction(embedding=True)
+    # model = get_trained_model(embedding=False)
+    # model.save('model.keras')
+    model = tf.keras.models.load_model('model.keras')
     print(COLUMNS)
+    good = genetic_algorithm(model, 0)
+    bad = genetic_algorithm(model, 1)
+    good = pd.DataFrame(good, columns=COLUMNS)
+    bad = pd.DataFrame(bad, columns=COLUMNS)
+
+    pred_good = model.predict(good.values)
+    pred_bad = model.predict(bad.values)
+    print(good, pred_good)
+    print(bad, pred_bad)
+    good.to_csv('good.csv')
+    bad.to_csv('bad.csv')
+    # make_prediction(embedding=True)
     # generator, predictor = get_trained_gan()
-    #
+
     # flow = generator(tf.random.normal([1, NOISE_DIM]), training=False)
     #
     # predicted = predictor.predict(flow)
