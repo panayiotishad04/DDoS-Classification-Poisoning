@@ -193,8 +193,25 @@ elif view == 'Testing':
         if st.button("Explainer LIME"):
             X_train = pd.DataFrame(X_train, columns=feature_names)
             class_names = ['0', '1']
-            explainer = LimeTabularExplainer(X_train, feature_names=feature_names, class_names=class_names,
-                                             mode='classification')
+            explainer = LimeTabularExplainer(X_train.values, feature_names=feature_names, class_names=class_names, mode='classification')
+            # Select an Input
+            #sample_idx = st.slider("Select a Test Instance", 0, len(X_train) - 1, 0)
+            #instance = X_train.iloc[sample_idx]
+            instance = X_train.iloc[96]
+
+            explanation = explainer.explain_instance(
+            data_row=instance.values,
+            predict_fn=model.predict_proba
+            )
+
+            # Show Explanation Graphics
+            st.write("Prediction Probabilities:", model.predict_proba([instance.values])[0])
+            fig = explanation.as_pyplot_figure()
+            st.pyplot(fig)
+
+            # Show Features and Values
+            st.write("Features and Values:")
+            st.dataframe(instance)
 
         if st.button("Show Decision Tree"):
             fig, ax = plt.subplots(figsize=(10, 10))
