@@ -22,9 +22,13 @@ view = st.sidebar.radio("Select View", ['Normal NIDS', 'Malicious Alerts', 'Test
 if view == 'Normal NIDS':
     st.title("Live NIDS")
     st.write("The flows are read live as soon as they are being captured")
+
+    model_options = ['Random Forest', 'Neural Network', 'GNN']
+    selected_file = st.selectbox("Select model: ", model_options)
     # Directory input for Normal NIDS
     monitored_dir = st.text_input("Enter the directory to monitor:",
                                   "nfcapd_dir")  # Default is the current directory
+
 
     # Check if the directory exists
     if os.path.exists(monitored_dir):
@@ -87,7 +91,7 @@ if view == 'Normal NIDS':
         model = loaded_model
         predictions = model.predict(filtered_flows)
 
-        malicious_flows = df[predictions > 0.0]
+        malicious_flows = df[predictions >= 0.0]
         malicious_file_path = 'malicious_flows.csv'
 
         # Write malicious flows to a CSV file
