@@ -76,12 +76,15 @@ if view == 'Normal NIDS':
             mapping[col] = le
 
         # Convert all columns to float and then to integer
-        for col in filtered_flows.columns:
-            try:
-                if filtered_flows[col].dtype == 'object':  # Check if the column contains strings
-                    filtered_flows[col] = filtered_flows[col].astype(float)
-            except Exception as e:
-                filtered_flows.drop(col, axis=1, inplace=True)
+        filtered_flows = filtered_flows[['id.orig_port',
+                                         'id.resp_pport',
+                                         'proto_enum',
+                                         'duration_interval',
+                                         'conn_state_string',
+                                         'orig_pkts_count',
+                                         'orig_ip_bytes_count',
+                                         'resp_pkts_count',
+                                         'resp_bytes']]
         print(filtered_flows)
 
         if selected_model == 'Random Forest':
@@ -89,7 +92,8 @@ if view == 'Normal NIDS':
                 model = pickle.load(file)
         elif selected_model == 'Neural Network':
             model = tf.keras.models.load_model('nn.h5')
-
+            print(model.summary())
+        print(filtered_flows.shape)
         predictions = model.predict(filtered_flows)
 
         df.to_csv('malicious_flows.csv', index=False)
