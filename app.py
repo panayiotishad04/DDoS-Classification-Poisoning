@@ -3,17 +3,17 @@ import pickle
 
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import shap
 import streamlit as st
+import tensorflow as tf
 import xgboost as xgb
 from lime.lime_tabular import LimeTabularExplainer
 from matplotlib import pyplot as plt
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
-import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder
 from xgboost import plot_tree
-import plotly.express as px
 
 # Sidebar for view selection
 st.set_page_config(layout="wide")
@@ -23,12 +23,11 @@ if view == 'Normal NIDS':
     st.title("Live NIDS")
     st.write("The flows are read live as soon as they are being captured")
 
-    model_options = ['Random Forest', 'Neural Network', 'GNN']
+    model_options = ['Random Forest', 'Neural Network', 'GNN (TODO)']
     selected_model = st.selectbox("Select model: ", model_options)
     # Directory input for Normal NIDS
     monitored_dir = st.text_input("Enter the directory to monitor:",
                                   "nfcapd_dir")  # Default is the current directory
-
 
     # Check if the directory exists
     if os.path.exists(monitored_dir):
@@ -78,20 +77,18 @@ if view == 'Normal NIDS':
 
         # Convert all columns to float and then to integer
         for col in filtered_flows.columns:
-            if filtered_flows[col].dtype == 'object':  # Check if the column contains strings
-                filtered_flows[col] = filtered_flows[col].astype(float)
-
-        # Convert all numeric columns to integers
-        filtered_flows = filtered_flows.astype(int)
+            try:
+                if filtered_flows[col].dtype == 'object':  # Check if the column contains strings
+                    filtered_flows[col] = filtered_flows[col].astype(float)
+            except Exception as e:
+                filtered_flows.drop(col, axis=1, inplace=True)
 
         # Load the model and make predictions
-        if selected_file == 'Random Forest':
+        if selected_model == 'Random Forest':
             with open('random_forest_model.pkl', 'rb') as file:
                 model = pickle.load(file)
-        elif selected_file == 'Neural Network':
+        elif selected_model == 'Neural Network':
             model = tf.keras.models.load_model('nn.h5')
-        elif selected_file == 'GNN':
-            model = loaded_model
 
         predictions = model.predict(filtered_flows)
 
@@ -105,7 +102,7 @@ if view == 'Normal NIDS':
 
 
     except Exception as e:
-        st.error(f"Could not read {selected_file} as a DataFrame: {e}")
+        st.error(f"Could not read {selected_file} as a DataFrame: {e.p()}")
 
 elif view == 'Malicious Alerts':
     st.title("Malicious Alerts")
@@ -201,15 +198,16 @@ elif view == 'Testing':
         if st.button("Explainer LIME"):
             X_train = pd.DataFrame(X_train, columns=feature_names)
             class_names = ['0', '1']
-            explainer = LimeTabularExplainer(X_train.values, feature_names=feature_names, class_names=class_names, mode='classification')
+            explainer = LimeTabularExplainer(X_train.values, feature_names=feature_names, class_names=class_names,
+                                             mode='classification')
             # Select an Input
-            #sample_idx = st.slider("Select a Test Instance", 0, len(X_train) - 1, 0)
-            #instance = X_train.iloc[sample_idx]
+            # sample_idx = st.slider("Select a Test Instance", 0, len(X_train) - 1, 0)
+            # instance = X_train.iloc[sample_idx]
             instance = X_train.iloc[96]
 
             explanation = explainer.explain_instance(
-            data_row=instance.values,
-            predict_fn=model.predict_proba
+                data_row=instance.values,
+                predict_fn=model.predict_proba
             )
 
             # Show Explanation Graphics
