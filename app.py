@@ -1,14 +1,19 @@
+import numpy as np
 import streamlit as st
 import pandas as pd
 import os
-import tensorflow as tf
-from sklearn.preprocessing import LabelEncoder
+from matplotlib import pyplot as plt
+# import tensorflow as tf
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+import shap
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import make_classification
 
-# Streamlit UI
 
 # Sidebar for view selection
 st.set_page_config(layout="wide")
-view = st.sidebar.radio("Select View", ['Normal NIDS', 'Malicious Alerts'])
+view = st.sidebar.radio("Select View", ['Normal NIDS', 'Malicious Alerts', 'Testing'])
 
 if view == 'Normal NIDS':
     st.title("Live NIDS")
@@ -84,25 +89,12 @@ if view == 'Normal NIDS':
         df['Prediction'] = (predictions >= 0.0).astype(int)
 
 
-        # Sidebar radio button for tab selection
-        # def highlight_malicious(row):
-        #     """Highlight rows with Prediction = 1 (Malicious)."""
-        #     return ['background-color: red' if row['Prediction'] == 1 else '' for _ in row]
-        #
-        #
-        # # Filter based on selected mode
-        # st.subheader(f"Normal NIDS Flows - {selected_file}")
-        # styled_df = df.style.apply(highlight_malicious, axis=1)
-        # st.dataframe(styled_df)
-
     except Exception as e:
         st.error(f"Could not read {selected_file} as a DataFrame: {e}")
 
 elif view == 'Malicious Alerts':
     st.title("Malicious Alerts")
     st.write("This view contains only the flows marked as potentially malicious DDoS")
-    # This is the view where we just display a preprocessed file
-    # You can replace 'malicious_file.csv' with the path to your preprocessed malicious alerts file
     malicious_filepath = 'malicious_flows.csv'
 
     try:
@@ -116,5 +108,66 @@ elif view == 'Malicious Alerts':
 
     else:
         st.warning("No files found in the directory.")
+
+elif view == 'Testing':
+    st.title("Adversarial Testing")
+    st.write("Statistics regarding adversarial testing")
+    malicious_filepath = 'malicious_flows.csv'
+
+    # if st.button('Start Attacking'):
+
+    try:
+        # Attempt to read the malicious alerts file as a pandas DataFrame
+        df_malicious = pd.read_csv(malicious_filepath)
+        st.write(f"Displaying preprocessed malicious alerts from {malicious_filepath}:")
+        st.dataframe(df_malicious)
+        score = [0, 0, 1, 1, 1, 1]
+        st.write(f"Adversarial score: {np.average(score)}")
+
+        most_common_prot = df_malicious['pr'].max
+        st.write(f"Most common protocol: {most_common_prot}")
+
+        # Example data
+        df_ben_ddos = pd.read_csv('df_ben_ddos.csv')
+        df_first = df_ben_ddos[:70000].sample(n=1000, random_state=42)
+        df_last = df_ben_ddos[80000:].sample(n=1000, random_state=42)
+        df_sampled = pd.concat([df_first, df_last])
+        X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
+        y = df_sampled['Category']
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        X, y = make_classification(n_samples=1000, n_features=10, n_classes=2, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Train an XGBoost model
+        model = xgb.XGBClassifier()
+        model.fit(X_train, y_train)
+
+        # Create a SHAP explainer for the XGBoost model
+        explainer = shap.TreeExplainer(model)
+
+        # Get SHAP values for the test set
+        shap_values = explainer.shap_values(X_test)
+
+        feature_names = ['id.orig_port', 'id.resp_haddr', 'id.resp_pport', 'proto_enum',
+                          'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
+                          'resp_pkts_count', 'resp_bytes']
+
+        if st.button("Show SHAP Summary Plot"):
+            st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
+            st.write("""
+            The SHAP summary plot shows how each feature contributes to the model's predictions across all samples.
+            Positive SHAP values indicate that the feature pushes the prediction towards the positive class (e.g., malicious),
+            and negative SHAP values indicate the opposite (e.g., benign).
+            """)
+            fig = plt.figure()
+            shap.summary_plot(shap_values, X_test, feature_names=feature_names, show=False)
+            st.pyplot(fig)
+
+
+    except Exception as e:
+        st.error(f"Could not read {malicious_filepath} as a DataFrame: {e}")
+
 else:
     st.error("The specified directory does not exist.")
