@@ -10,7 +10,7 @@ from lime.lime_tabular import LimeTabularExplainer
 from matplotlib import pyplot as plt
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
-# import tensorflow as tf
+import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder
 from xgboost import plot_tree
 import plotly.express as px
@@ -24,7 +24,7 @@ if view == 'Normal NIDS':
     st.write("The flows are read live as soon as they are being captured")
 
     model_options = ['Random Forest', 'Neural Network', 'GNN']
-    selected_file = st.selectbox("Select model: ", model_options)
+    selected_model = st.selectbox("Select model: ", model_options)
     # Directory input for Normal NIDS
     monitored_dir = st.text_input("Enter the directory to monitor:",
                                   "nfcapd_dir")  # Default is the current directory
@@ -85,10 +85,14 @@ if view == 'Normal NIDS':
         filtered_flows = filtered_flows.astype(int)
 
         # Load the model and make predictions
-        # model = tf.keras.models.load_model('nn.h5')
-        with open('random_forest_model.pkl', 'rb') as file:
-            loaded_model = pickle.load(file)
-        model = loaded_model
+        if selected_file == 'Random Forest':
+            with open('random_forest_model.pkl', 'rb') as file:
+                model = pickle.load(file)
+        elif selected_file == 'Neural Network':
+            model = tf.keras.models.load_model('nn.h5')
+        elif selected_file == 'GNN':
+            model = loaded_model
+
         predictions = model.predict(filtered_flows)
 
         malicious_flows = df[predictions >= 0.0]
