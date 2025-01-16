@@ -57,5 +57,8 @@ A web application that provides an interactive interface for exploring data and 
 File: app.py
 
 Start the web app using 
+```
 streamlit run app.py
+```
+
 Open your browser and navigate to `http://localhost:8501`
