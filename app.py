@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import pickle
 
@@ -17,13 +18,13 @@ from xgboost import plot_tree
 
 # Sidebar for view selection
 st.set_page_config(layout="wide")
-view = st.sidebar.radio("Select View", ['Normal NIDS', 'Malicious Alerts', 'Testing'])
+view = st.sidebar.radio("Select View", ['Normal NIDS', 'Malicious Alerts', 'Thunder NIDS Analyzer'])
 
 if view == 'Normal NIDS':
     st.title("Live NIDS")
     st.write("The flows are read live as soon as they are being captured")
 
-    model_options = ['Random Forest', 'Neural Network', 'GNN (TODO)']
+    model_options = ['Random Forest', 'Neural Network', 'GNN']
     selected_model = st.selectbox("Select model: ", model_options)
     # Directory input for Normal NIDS
     monitored_dir = st.text_input("Enter the directory to monitor:",
@@ -132,131 +133,177 @@ elif view == 'Malicious Alerts':
             fig.update_layout(xaxis_title='Byte Values', yaxis_title='Count')
             st.plotly_chart(fig)
 
+
     except Exception as e:
         st.error(f"Could not read {malicious_filepath} as a DataFrame: {e}")
 
-    else:
-        st.warning("No files found in the directory.")
+    # else:
+    #     st.warning("No files found in the directory.")
 
-elif view == 'Testing':
+elif view == 'Thunder NIDS Analyzer':
     st.title("Adversarial Testing")
     st.write("Statistics regarding adversarial testing")
     malicious_filepath = 'df_ben_ddos_shorter.csv'
 
-    # if st.button('Start Attacking'):
+    # Initialize session states for buttons
+    if 'start_attack' not in st.session_state:
+        st.session_state.start_attack = False
+    if 'compare_hist' not in st.session_state:
+        st.session_state.compare_hist = False
+    if 'show_shap' not in st.session_state:
+        st.session_state.show_shap = False
+    if 'show_lime' not in st.session_state:
+        st.session_state.show_lime = False
+    if 'show_tree' not in st.session_state:
+        st.session_state.show_tree = False
 
-    try:
-        # Attempt to read the malicious alerts file as a pandas DataFrame
-        df_malicious = pd.read_csv(malicious_filepath)
-        st.write(f"Displaying preprocessed malicious alerts from {malicious_filepath}:")
-        st.dataframe(df_malicious)
-        score = [0, 0, 1, 1, 1, 1]
-        st.write(f"Adversarial score: {np.average(score)}")
+    # Callback for "Start Adversarial Attack" button
+    def start_attack_callback():
+        st.session_state.start_attack = True
 
-        # most_common_prot = df_malicious['pr'].max
-        # st.write(f"Most common protocol: {most_common_prot}")
+    # Display the "Start Adversarial Attack" button
+    if not st.session_state.start_attack:
+        st.button('Start Adversarial Attack', on_click=start_attack_callback)
+    else:
+        try:
+            # Load and display the adversarial data
+            df_malicious = pd.read_csv(malicious_filepath)
+            st.write(f"Displaying malicious flows which managed to trick the classifier and were labeled as normal")
+            df_sampled = pd.read_csv('df_ben_ddos_shorter.csv')
+            df_copy = pd.read_csv('df_ben_ddos_shorter.csv')
+            df_copy['id.orig_addr'] = df_copy['id.orig_addr'].map(lambda ip: str(ipaddress.IPv4Address(ip)))
+            df_copy['id.orig_port'] = df_copy['id.orig_port'].map(lambda ip: str(ip))
+            df_copy['id.resp_haddr'] = df_copy['id.resp_haddr'].map(lambda ip: str(ipaddress.IPv4Address(ip)))
+            st.dataframe(df_copy)
 
-        # Example data
-        df_sampled = pd.read_csv('df_ben_ddos_shorter.csv')
-        X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
-        # feature_names = ['sp', 'dp', 'pr', 'td', 'flg', 'ibyt', 'ipkt', 'opkt', 'obyt']
-        y = df_sampled['Category']
-        # scaler = StandardScaler()
-        # X_scaled = scaler.fit_transform(X)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        X, y = make_classification(n_samples=10000, n_features=10, n_classes=2, random_state=42)
+            X = df_sampled.drop(columns=['Category', 'id.orig_addr', 'id.resp_haddr'])
+            y = df_sampled['Category']
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        feature_names = ['id.orig_port', 'id.resp_pport', 'proto_enum',
-                         'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
-                         'resp_pkts_count', 'resp_bytes']
+            feature_names = ['id.orig_port', 'id.resp_pport', 'proto_enum',
+                             'duration_interval', 'conn_state_string', 'orig_pkts_count', 'orig_ip_bytes_count',
+                             'resp_pkts_count', 'resp_bytes']
 
-        # Train an XGBoost model
-        dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
-        model = xgb.train({
-            'max_depth': 20,
-            'eta': 0.1,
-            'objective': 'reg:squarederror'
-        }, dtrain, 30)
+            # Train an XGBoost model
+            dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
+            model = xgb.train({
+                'max_depth': 20,
+                'eta': 0.1,
+                'objective': 'reg:squarederror'
+            }, dtrain, 30)
 
-        # Create a SHAP explainer for the XGBoost model
-        explainer = shap.TreeExplainer(model)
+            # Save the model and test data in session state for subsequent use
+            st.session_state['xgboost_model'] = model
+            st.session_state['X_test'] = X_test
+            st.session_state['feature_names'] = feature_names
 
-        # Get SHAP values for the test set
-        shap_values = explainer.shap_values(X_test)
+        except Exception as e:
+            st.error(f"Error during attack simulation: {e}")
 
-        if st.button("Show SHAP Summary Plot"):
-            st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
-            st.write("""
-            The SHAP summary plot shows how each feature contributes to the model's predictions across all samples.
-            Positive SHAP values indicate that the feature pushes the prediction towards the positive class (e.g., malicious),
-            and negative SHAP values indicate the opposite (e.g., benign).
-            """)
-            fig = plt.figure()
-            shap.summary_plot(shap_values, X_test, feature_names=feature_names, show=False)
-            st.pyplot(fig)
+        # Display the rest of the buttons after the attack is started
+        def compare_hist_callback():
+            st.session_state.compare_hist = True
 
-        if st.button("Explainer LIME"):
-            X_train = pd.DataFrame(X_train, columns=feature_names)
-            class_names = ['0', '1']
-            explainer = LimeTabularExplainer(X_train.values, feature_names=feature_names, class_names=class_names,
-                                             mode='classification')
-            # Select an Input
-            # sample_idx = st.slider("Select a Test Instance", 0, len(X_train) - 1, 0)
-            # instance = X_train.iloc[sample_idx]
-            instance = X_train.iloc[96]
+        def show_shap_callback():
+            st.session_state.show_shap = True
 
-            explanation = explainer.explain_instance(
-                data_row=instance.values,
-                predict_fn=model.predict_proba
-            )
+        def show_lime_callback():
+            st.session_state.show_lime = True
 
-            # Show Explanation Graphics
-            st.write("Prediction Probabilities:", model.predict_proba([instance.values])[0])
-            fig = explanation.as_pyplot_figure()
-            st.pyplot(fig)
+        def show_tree_callback():
+            st.session_state.show_tree = True
 
-            # Show Features and Values
-            st.write("Features and Values:")
-            st.dataframe(instance)
+        # st.button('Compare Hist', on_click=compare_hist_callback)
+        # st.button('Show SHAP Summary Plot', on_click=show_shap_callback)
+        # st.button('Explainer LIME', on_click=show_lime_callback)
+        # st.button('Show Decision Tree', on_click=show_tree_callback)
 
-        if st.button("Show Decision Tree"):
-            fig, ax = plt.subplots(figsize=(10, 10))
-            plot_tree(model, num_trees=0, ax=ax)
-            st.pyplot(fig)
-
-        if st.button("Compare Hist"):
+        # Actions for the buttons
+        # if st.session_state.compare_hist:
+        try:
+            st.subheader("Feature Manipulation to Evade Detection")
             df = pd.read_csv("flows_2.csv")
-            # Create the histogram
             fig = px.histogram(
                 df,
                 x="column",  # Column to plot
-                title="Feature changed to make the flow benign",
-                labels={"column": "Category"},  # Label for x-axis
-                text_auto=True  # Show counts on bars
+                title="Feature changes to make flows benign",
+                labels={"column": "Category"},
+                text_auto=True
             )
-
-            # Update layout to adjust bar spacing, tilt labels, and set colors
             fig.update_traces(
-                marker=dict(color="darkorange", line=dict(width=0)),  # Set bar color to orange
-                textfont=dict(color="blue")  # Set text color to blue
+                marker=dict(color="darkorange", line=dict(width=0)),
+                textfont=dict(color="blue")
             )
-
-            fig.update_xaxes(tickangle=45, linecolor="blue")  # Tilt labels
-            fig.update_yaxes(linecolor="blue")  # Adjust y-axis line color
-            # Remove background color
+            fig.update_xaxes(tickangle=45, linecolor="blue")
+            fig.update_yaxes(linecolor="blue")
             fig.update_layout(
                 xaxis_title="Feature changed",
                 yaxis_title="Times applied",
-                bargap=0.2,  # Ensure bars are joined
-                plot_bgcolor="white",  # Background color of the plot area
-                paper_bgcolor="white",  # Background color of the entire figure
+                bargap=0.2,
+                plot_bgcolor="white",
+                paper_bgcolor="white",
             )
+            st.plotly_chart(fig)
+        except Exception as e:
+            st.error(f"Error generating histogram: {e}")
 
-            st.plotly_chart(fig)  # Correct method to display Plotly figure in Streamlit
+    # if st.session_state.show_shap:
+        try:
+            model = st.session_state.get('xgboost_model')
+            X_test = st.session_state.get('X_test')
+            feature_names = st.session_state.get('feature_names')
 
+            if model and X_test is not None:
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(X_test)
 
-    except Exception as e:
-        st.error(f"Could not read {malicious_filepath} as a DataFrame: {e.pr()}")
+                st.subheader("SHAP Summary Plot (Overall Feature Contribution)")
+                fig = plt.figure()
+                shap.summary_plot(shap_values, X_test, feature_names=feature_names, show=False)
+                st.pyplot(fig)
+            else:
+                st.error("Model or test data not available for SHAP plot.")
+        except Exception as e:
+            st.error(f"Error generating SHAP plot: {e}")
+
+    # if st.session_state.show_lime:
+        try:
+            st.subheader("Flow Specific Label Probabilities using LIME")
+            X_train = pd.DataFrame(X_train, columns=st.session_state.feature_names)
+            model_2 = xgb.XGBClassifier()
+            model_2.fit(X_train, y_train)
+            class_names = ['0', '1']
+            explainer = LimeTabularExplainer(X_train.values, feature_names=feature_names, class_names=class_names,
+                                             mode='classification')
+
+            sample_idx = st.slider("Select a Test Instance", 1, len(X_train) - 1, 1)
+            if sample_idx == 0:
+                st.dataframe(X_train[0])
+            else:
+                st.dataframe(X_train[sample_idx - 1:sample_idx])
+            instance = X_train.iloc[sample_idx]
+            explanation = explainer.explain_instance(
+                data_row=instance.values,
+                predict_fn=model_2.predict_proba
+            )
+            fig = explanation.as_pyplot_figure()
+            st.write("Prediction Probabilities:", model_2.predict_proba([instance.values])[0])
+            st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Error generating LIME explanation: {e}")
+
+    # if st.session_state.show_tree:
+        try:
+            st.subheader("Decision branches of Random Forest")
+            model = st.session_state.get('xgboost_model')
+            if model:
+                fig, ax = plt.subplots(figsize=(10, 10))
+                plot_tree(model, num_trees=0, ax=ax)
+                st.pyplot(fig)
+            else:
+                st.error("Model not available for decision tree plot.")
+        except Exception as e:
+            st.error(f"Error generating decision tree: {e}")
 
 else:
     st.error("The specified directory does not exist.")
